@@ -1,6 +1,8 @@
 import { MLBTeam, MLBPlayer, TeamStanding, StatLeader, PlayerStats } from '../types/mlb';
 
-const BASE_API = 'https://statsapi.mlb.com/api/v1';
+// Read MLB Data API base URL from Environment Variable (Vercel / .env)
+const BASE_API = (import.meta.env.VITE_MLB_API_URL || 'https://statsapi.mlb.com/api/v1').replace(/\/$/, '');
+const HEADSHOT_BASE = (import.meta.env.VITE_MLB_HEADSHOT_URL || 'https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people').replace(/\/$/, '');
 
 export const MLB_PARK_FACTORS: Record<string, number> = {
   COL: 1.35, BOS: 1.09, CIN: 1.08, LAD: 1.03, NYY: 1.02, PHI: 1.05,
@@ -73,7 +75,7 @@ export async function fetchTeamRoster(teamId: number): Promise<MLBPlayer[]> {
         },
         batSide: { code: 'R', description: 'Right' },
         pitchHand: { code: 'R', description: 'Right' },
-        headshotUrl: `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${p.id}/headshot/67/current`
+        headshotUrl: `${HEADSHOT_BASE}/${p.id}/headshot/67/current`
       };
     });
 
@@ -203,13 +205,11 @@ export async function fetchLeagueFipConstant(): Promise<number> {
   }
 
   try {
-    // Standard MLB season baseline is ~3.15
-    // FIP_constant = leagueERA - ((13*leagueHR + 3*(leagueBB + leagueHBP) - 2*leagueK) / leagueIP)
     const leagueEra = 4.12;
-    const leagueHrRate = 1.15; // HR/9
-    const leagueBbRate = 3.10; // BB/9
-    const leagueHbpRate = 0.38;// HBP/9
-    const leagueKRate = 8.60;  // K/9
+    const leagueHrRate = 1.15;
+    const leagueBbRate = 3.10;
+    const leagueHbpRate = 0.38;
+    const leagueKRate = 8.60;
 
     const rawFipComp = (13.0 * (leagueHrRate / 9.0) + 3.0 * ((leagueBbRate + leagueHbpRate) / 9.0) - 2.0 * (leagueKRate / 9.0));
     const calculatedFipConst = Number((leagueEra - rawFipComp).toFixed(2));
