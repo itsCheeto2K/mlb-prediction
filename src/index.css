@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#080E1E] text-slate-100 font-sans;
+  }
+}
+
+/* Custom modern scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0B132B;
+}
+::-webkit-scrollbar-thumb {
+  background: #1C2541;
+  border-radius: 4px;
+  border: 1px solid #3A506B;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3A506B;
+}
+
+.glow-cyan {
+  box-shadow: 0 0 20px -5px rgba(0, 240, 255, 0.35);
+}
+
+.glow-gold {
+  box-shadow: 0 0 20px -5px rgba(255, 215, 0, 0.35);
+}
