@@ -1,0 +1,21 @@
+00:07:11.961 Running build in Washington, D.C., USA (East) – iad1
+00:07:11.962 Build machine configuration: 2 cores, 8 GB
+00:07:12.095 Cloning github.com/itsCheeto2K/mlb-prediction (Branch: main, Commit: 0526b2b)
+00:07:12.096 Previous build caches not available.
+00:07:12.386 Cloning completed: 291.000ms
+00:07:12.756 Running "vercel build"
+00:07:12.794 Vercel CLI 59.3.0
+00:07:13.302 Installing dependencies...
+00:07:17.603 
+00:07:17.604 added 210 packages in 4s
+00:07:17.605 
+00:07:17.605 41 packages are looking for funding
+00:07:17.606   run `npm fund` for details
+00:07:17.606 npm warn allow-scripts 1 package has install scripts not yet covered by allowScripts:
+00:07:17.608 npm warn allow-scripts   esbuild@0.21.5 (postinstall: node install.js)
+00:07:17.608 npm warn allow-scripts
+00:07:17.608 npm warn allow-scripts Run `npm approve-scripts --allow-scripts-pending` to review, or `npm approve-scripts <pkg>` to allow.
+00:07:17.753 
+00:07:17.753 > mlb-prediction@1.0.0 build
+00:07:17.753 > tsc && vite build
+00:07:17.753 
