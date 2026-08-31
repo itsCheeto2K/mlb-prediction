@@ -26,6 +26,9 @@ export interface SharpOddsItem {
   line: number | null;
   is_live: boolean;
   timestamp: string;
+  is_main_line?: boolean;
+  is_alternate_line?: boolean;
+  is_player_prop?: boolean;
   home?: {
     name: string;
     abbreviation: string;
@@ -158,49 +161,116 @@ function extractGameOdds(items: SharpOddsItem[]): LiveSportsbookOdds {
   const isLive = items.some((i) => i.is_live);
   const timestamp = items[0]?.timestamp || new Date().toISOString();
 
+  // 1. Moneyline Extraction
   let homeMl: number | undefined;
   let awayMl: number | undefined;
   let homeMlProb = 0.5;
   let awayMlProb = 0.5;
 
-  let totalLine = 8.5;
-  let overOdds = -110;
-  let underOdds = -110;
+  const mlItems = items.filter((i) => i.market_type === 'moneyline' && !i.is_player_prop);
+  // Prefer main lines
+  const mainMlItems = mlItems.filter((i) => i.is_main_line !== false);
+  const targetMlItems = mainMlItems.length > 0 ? mainMlItems : mlItems;
 
+  for (const item of targetMlItems) {
+    if (item.team_side === 'home' || item.selection_type === 'home') {
+      homeMl = item.odds_american;
+      homeMlProb = item.odds_probability || 0.5;
+    } else if (item.team_side === 'away' || item.selection_type === 'away') {
+      awayMl = item.odds_american;
+      awayMlProb = item.odds_probability || 0.5;
+    }
+  }
+
+  // 2. Total Runs (Over/Under) Extraction
+  // EXCLUDE team_total and player props
+  const totalItems = items.filter(
+    (i) => i.market_type === 'total_runs' && i.line !== null && !i.is_player_prop
+  );
+
+  interface LineData {
+    line: number;
+    overOdds?: number;
+    underOdds?: number;
+    isMain: boolean;
+  }
+  const linesMap = new Map<number, LineData>();
+
+  for (const item of totalItems) {
+    if (item.line === null) continue;
+    const l = item.line;
+    if (!linesMap.has(l)) {
+      linesMap.set(l, {
+        line: l,
+        isMain: item.is_main_line === true || item.is_alternate_line === false
+      });
+    }
+    const current = linesMap.get(l)!;
+    if (item.is_main_line === true) current.isMain = true;
+
+    const sel = (item.selection_type || item.selection || '').toLowerCase();
+    if (sel.includes('over')) {
+      current.overOdds = item.odds_american;
+    } else if (sel.includes('under')) {
+      current.underOdds = item.odds_american;
+    }
+  }
+
+  let selectedTotal: { line: number; overOdds: number; underOdds: number } | undefined;
+
+  if (linesMap.size > 0) {
+    const candidates = Array.from(linesMap.values());
+    // 1st priority: explicit main line
+    let best = candidates.find((c) => c.isMain && (c.overOdds !== undefined || c.underOdds !== undefined));
+
+    // 2nd priority: line with both Over & Under available, closest to standard 8.5
+    if (!best) {
+      const fullLines = candidates.filter((c) => c.overOdds !== undefined && c.underOdds !== undefined);
+      if (fullLines.length > 0) {
+        fullLines.sort((a, b) => Math.abs(a.line - 8.5) - Math.abs(b.line - 8.5));
+        best = fullLines[0];
+      }
+    }
+
+    // 3rd priority: line closest to 8.5 with at least one odds
+    if (!best) {
+      candidates.sort((a, b) => Math.abs(a.line - 8.5) - Math.abs(b.line - 8.5));
+      best = candidates[0];
+    }
+
+    if (best) {
+      const over = best.overOdds ?? (best.underOdds !== undefined ? (best.underOdds > 0 ? -(best.underOdds + 20) : Math.abs(best.underOdds) - 20) : -110);
+      const under = best.underOdds ?? (best.overOdds !== undefined ? (best.overOdds > 0 ? -(best.overOdds + 20) : Math.abs(best.overOdds) - 20) : -110);
+      selectedTotal = {
+        line: best.line,
+        overOdds: over,
+        underOdds: under
+      };
+    }
+  }
+
+  // 3. Run Line (Handicap spread)
+  const rlItems = items.filter(
+    (i) => i.market_type === 'run_line' && i.line !== null && !i.is_player_prop
+  );
   let spread = 1.5;
   let homeSpreadOdds = -110;
   let awaySpreadOdds = -110;
 
-  for (const item of items) {
-    // Moneyline
-    if (item.market_type === 'moneyline') {
-      if (item.team_side === 'home' || item.selection_type === 'home') {
-        homeMl = item.odds_american;
-        homeMlProb = item.odds_probability || 0.5;
-      } else if (item.team_side === 'away' || item.selection_type === 'away') {
-        awayMl = item.odds_american;
-        awayMlProb = item.odds_probability || 0.5;
-      }
-    }
+  // Filter 1.5 spread items (standard MLB runline) or main lines
+  const standardRlItems = rlItems.filter(
+    (i) => Math.abs(i.line || 0) === 1.5 || i.is_main_line === true
+  );
+  const targetRl = standardRlItems.length > 0 ? standardRlItems : rlItems;
 
-    // Total Runs (Over/Under)
-    if ((item.market_type === 'total_runs' || item.market_type === 'team_total') && item.line !== null) {
-      totalLine = item.line;
-      if (item.selection_type === 'over' || item.selection.toLowerCase().includes('over')) {
-        overOdds = item.odds_american;
-      } else if (item.selection_type === 'under' || item.selection.toLowerCase().includes('under')) {
-        underOdds = item.odds_american;
-      }
-    }
-
-    // Run Line (Handicap spread)
-    if (item.market_type === 'run_line' && item.line !== null) {
+  for (const item of targetRl) {
+    if (item.line !== null) {
       spread = Math.abs(item.line);
-      if (item.team_side === 'home' || item.selection_type === 'home') {
-        homeSpreadOdds = item.odds_american;
-      } else if (item.team_side === 'away' || item.selection_type === 'away') {
-        awaySpreadOdds = item.odds_american;
-      }
+    }
+    if (item.team_side === 'home' || item.selection_type === 'home') {
+      homeSpreadOdds = item.odds_american;
+    } else if (item.team_side === 'away' || item.selection_type === 'away') {
+      awaySpreadOdds = item.odds_american;
     }
   }
 
@@ -217,10 +287,10 @@ function extractGameOdds(items: SharpOddsItem[]): LiveSportsbookOdds {
             awayProb: awayMlProb
           }
         : undefined,
-    totalRuns: {
-      line: totalLine,
-      overOdds,
-      underOdds
+    totalRuns: selectedTotal || {
+      line: 8.5,
+      overOdds: -110,
+      underOdds: -110
     },
     runLine: {
       spread,
