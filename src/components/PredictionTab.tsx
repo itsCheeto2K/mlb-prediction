@@ -9,7 +9,15 @@ import { RawLineupModal } from './RawLineupModal';
 import { ParsedMatchup, ParsedTeamLineup } from '../utils/rawLineupParser';
 import { Zap, RefreshCw, Sparkles, AlertCircle, Shield, Users, FileText, CheckCircle2 } from 'lucide-react';
 
-export const PredictionTab: React.FC = () => {
+interface PredictionTabProps {
+  initialAwayTeamName?: string;
+  initialHomeTeamName?: string;
+}
+
+export const PredictionTab: React.FC<PredictionTabProps> = ({
+  initialAwayTeamName,
+  initialHomeTeamName
+}) => {
   const [teams, setTeams] = useState<MLBTeam[]>([]);
   const [homeTeamId, setHomeTeamId] = useState<number | null>(null);
   const [awayTeamId, setAwayTeamId] = useState<number | null>(null);
@@ -43,15 +51,25 @@ export const PredictionTab: React.FC = () => {
       const teamList = await fetchMLBTeams();
       setTeams(teamList);
       if (teamList.length >= 2) {
-        const dodgers = teamList.find(t => t.abbreviation === 'LAD') || teamList[0];
-        const yankees = teamList.find(t => t.abbreviation === 'NYY') || teamList[1];
-        setHomeTeamId(dodgers.id);
-        setAwayTeamId(yankees.id);
+        let home = teamList.find(t => t.abbreviation === 'LAD') || teamList[0];
+        let away = teamList.find(t => t.abbreviation === 'NYY') || teamList[1];
+
+        if (initialHomeTeamName) {
+          const matchedHome = teamList.find(t => t.name.toLowerCase().includes(initialHomeTeamName.toLowerCase()) || initialHomeTeamName.toLowerCase().includes(t.name.toLowerCase()));
+          if (matchedHome) home = matchedHome;
+        }
+        if (initialAwayTeamName) {
+          const matchedAway = teamList.find(t => t.name.toLowerCase().includes(initialAwayTeamName.toLowerCase()) || initialAwayTeamName.toLowerCase().includes(t.name.toLowerCase()));
+          if (matchedAway) away = matchedAway;
+        }
+
+        setHomeTeamId(home.id);
+        setAwayTeamId(away.id);
       }
       setIsLoadingTeams(false);
     }
     initTeams();
-  }, []);
+  }, [initialAwayTeamName, initialHomeTeamName]);
 
   // Load Home Roster when Home Team changes
   useEffect(() => {

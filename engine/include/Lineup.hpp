@@ -18,6 +18,7 @@ public:
     const std::vector<std::shared_ptr<Batter>>& getAllBatters() const { return batters; }
     size_t size() const { return batters.size(); }
     void resetOrder() { currentBatterIndex = 0; }
+    void setBatterIndex(size_t index) { currentBatterIndex = (batters.empty() ? 0 : (index % batters.size())); }
 
     double getCompositeWoba() const;
     double getCompositeOps() const;

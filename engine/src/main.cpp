@@ -44,6 +44,17 @@ int extractInt(const std::string& json, const std::string& key, int defVal = 0) 
     return static_cast<int>(extractDouble(json, key, defVal));
 }
 
+bool extractBool(const std::string& json, const std::string& key, bool defVal = false) {
+    std::string needle = "\"" + key + "\":";
+    size_t pos = json.find(needle);
+    if (pos == std::string::npos) return defVal;
+    pos += needle.length();
+    while (pos < json.length() && (json[pos] == ' ' || json[pos] == '\t' || json[pos] == '\n' || json[pos] == '\r')) pos++;
+    if (pos + 4 <= json.length() && json.substr(pos, 4) == "true") return true;
+    if (pos + 5 <= json.length() && json.substr(pos, 5) == "false") return false;
+    return defVal;
+}
+
 std::vector<std::string> extractArrayObjects(const std::string& json, const std::string& arrayKey) {
     std::vector<std::string> results;
     std::string needle = "\"" + arrayKey + "\":";
@@ -199,6 +210,35 @@ int main(int argc, char* argv[]) {
     if (simulations < 1000) simulations = 10000;
 
     MatchSimulator simulator(homeTeam, awayTeam, simulations);
+
+    // Parse Live Resume Simulation State
+    bool isLiveSim = extractBool(input, "isLiveSimulation", false) || extractBool(input, "isLive", false);
+    if (isLiveSim) {
+        LiveMatchState liveState;
+        liveState.isLive = true;
+        liveState.currentInning = extractInt(input, "currentInning", 1);
+        std::string half = extractString(input, "inningHalf", "top");
+        for (char& c : half) c = std::tolower(c);
+        liveState.inningHalf = (half == "bottom" || half == "bot") ? "bottom" : "top";
+        liveState.currentOuts = extractInt(input, "outs", 0);
+        liveState.currentHomeRuns = extractInt(input, "currentHomeRuns", 0);
+        liveState.currentAwayRuns = extractInt(input, "currentAwayRuns", 0);
+        liveState.nextBatterIndexHome = static_cast<size_t>(extractInt(input, "nextBatterIndexHome", 0));
+        liveState.nextBatterIndexAway = static_cast<size_t>(extractInt(input, "nextBatterIndexAway", 0));
+
+        // Base runners
+        liveState.runner1st = extractBool(input, "runner1st", false);
+        liveState.runner2nd = extractBool(input, "runner2nd", false);
+        liveState.runner3rd = extractBool(input, "runner3rd", false);
+
+        // Market lines input for Edge vs Market computation
+        liveState.marketTotalLine = extractDouble(input, "marketTotalLine", 0.0);
+        liveState.marketHomeOdds = extractInt(input, "marketHomeOdds", 0);
+        liveState.marketAwayOdds = extractInt(input, "marketAwayOdds", 0);
+
+        simulator.setLiveState(liveState);
+    }
+
     PredictionResult result = simulator.runSimulation();
 
     std::cout << result.toJson() << std::endl;

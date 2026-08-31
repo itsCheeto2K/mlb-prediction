@@ -7,10 +7,13 @@ std::string PredictionResult::toJson() const {
     ss << "{\n";
     ss << "  \"homeTeam\": \"" << homeTeam << "\",\n";
     ss << "  \"awayTeam\": \"" << awayTeam << "\",\n";
+    ss << "  \"isLiveSimulation\": " << (isLiveSimulation ? "true" : "false") << ",\n";
     ss << "  \"homeWinProb\": " << std::fixed << std::setprecision(4) << homeWinProb << ",\n";
     ss << "  \"awayWinProb\": " << awayWinProb << ",\n";
     ss << "  \"homeExpectedRuns\": " << std::setprecision(2) << homeExpectedRuns << ",\n";
     ss << "  \"awayExpectedRuns\": " << awayExpectedRuns << ",\n";
+    ss << "  \"liveRemainingExpectedRunsHome\": " << std::setprecision(2) << liveRemainingExpectedRunsHome << ",\n";
+    ss << "  \"liveRemainingExpectedRunsAway\": " << std::setprecision(2) << liveRemainingExpectedRunsAway << ",\n";
     ss << "  \"totalExpectedRuns\": " << totalExpectedRuns << ",\n";
     ss << "  \"homeMoneyline\": " << homeMoneyline << ",\n";
     ss << "  \"awayMoneyline\": " << awayMoneyline << ",\n";
@@ -57,6 +60,18 @@ std::string PredictionResult::toJson() const {
     for (const auto& kv : commonScores) {
         ss << "    \"" << kv.first << "\": " << kv.second << (++scoreIdx < commonScores.size() ? ",\n" : "\n");
     }
+    ss << "  },\n";
+    ss << "  \"edgeVsMarket\": {\n";
+    ss << "    \"hasMarketData\": " << (edgeVsMarket.hasMarketData ? "true" : "false") << ",\n";
+    ss << "    \"marketTotalLine\": " << std::setprecision(1) << edgeVsMarket.marketTotalLine << ",\n";
+    ss << "    \"modelTotal\": " << std::setprecision(2) << edgeVsMarket.modelTotal << ",\n";
+    ss << "    \"totalEdgeRuns\": " << edgeVsMarket.totalEdgeRuns << ",\n";
+    ss << "    \"totalSignal\": \"" << edgeVsMarket.totalSignal << "\",\n";
+    ss << "    \"marketHomeOdds\": " << edgeVsMarket.marketHomeOdds << ",\n";
+    ss << "    \"marketAwayOdds\": " << edgeVsMarket.marketAwayOdds << ",\n";
+    ss << "    \"evHome\": " << std::setprecision(4) << edgeVsMarket.evHome << ",\n";
+    ss << "    \"evAway\": " << edgeVsMarket.evAway << ",\n";
+    ss << "    \"mlSignal\": \"" << edgeVsMarket.mlSignal << "\"\n";
     ss << "  },\n";
 
     ss << "  \"recommendation\": \"" << recommendation << "\",\n";

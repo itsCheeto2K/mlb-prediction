@@ -1,5 +1,4 @@
-import React from 'react';
-import { Activity, BarChart3, Users, Award, Zap, ShieldCheck } from 'lucide-react';
+import { Activity, BarChart3, Users, Award, Zap, ShieldCheck, Radio } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: string;
@@ -8,7 +7,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
   const tabs = [
-    { id: 'prediction', label: 'Match Prediction', icon: Zap, badge: 'C++ OOP' },
+    { id: 'liveGames', label: 'Live Games & Predictions', icon: Radio, badge: 'LIVE AI', isLiveTab: true },
     { id: 'teamStats', label: 'Team Stats', icon: BarChart3 },
     { id: 'playerStats', label: 'Player Stats', icon: Users },
     { id: 'leaders', label: 'League Leaders', icon: Award },
@@ -19,7 +18,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Brand Logo */}
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('prediction')}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('liveGames')}>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-cyan-500/20">
               <Activity className="w-6 h-6 text-white" />
             </div>
@@ -27,10 +26,10 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
               <div className="flex items-center gap-2">
                 <span className="font-extrabold text-lg text-white tracking-wider">MLB<span className="text-cyan-400">PREDICT</span></span>
                 <span className="text-[10px] font-mono font-bold bg-cyan-950 text-cyan-400 border border-cyan-700/50 px-1.5 py-0.5 rounded">
-                  OOP C++20
+                  LIVE C++20
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium">Sabermetrics & Monte Carlo Simulator</p>
+              <p className="text-[11px] text-slate-400 font-medium">Real-Time In-Game Simulation & Betting Intel</p>
             </div>
           </div>
 
@@ -49,10 +48,14 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                       : 'text-slate-400 hover:text-slate-200 hover:bg-[#1C2541]/60'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
+                  <Icon className={`w-4 h-4 ${tab.isLiveTab ? 'text-red-400 animate-pulse' : isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
                   <span>{tab.label}</span>
                   {tab.badge && (
-                    <span className="hidden md:inline-block text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 rounded font-mono font-bold">
+                    <span className={`hidden md:inline-block text-[9px] px-1.5 py-0.2 rounded font-mono font-bold border ${
+                      tab.isLiveTab
+                        ? 'bg-red-500/20 text-red-400 border-red-500/40 animate-pulse'
+                        : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                    }`}>
                       {tab.badge}
                     </span>
                   )}

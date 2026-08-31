@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Navbar } from './components/Navbar';
-import { PredictionTab } from './components/PredictionTab';
+import { LiveGamesTab } from './components/LiveGamesTab';
 import { TeamStatsTab } from './components/TeamStatsTab';
 import { PlayerStatsTab } from './components/PlayerStatsTab';
 import { LeadersTab } from './components/LeadersTab';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<string>('prediction');
+  const [activeTab, setActiveTab] = useState<string>('liveGames');
 
   return (
     <div className="min-h-screen bg-[#080E1E] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-black">
@@ -15,7 +15,7 @@ export function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-        {activeTab === 'prediction' && <PredictionTab />}
+        {activeTab === 'liveGames' && <LiveGamesTab />}
         {activeTab === 'teamStats' && <TeamStatsTab />}
         {activeTab === 'playerStats' && <PlayerStatsTab />}
         {activeTab === 'leaders' && <LeadersTab />}

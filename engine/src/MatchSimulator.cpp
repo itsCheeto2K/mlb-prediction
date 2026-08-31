@@ -42,13 +42,15 @@ Outcome MatchSimulator::simulatePlateAppearance(const Batter& batter, const Pitc
     return Outcome::OUT;
 }
 
-int MatchSimulator::simulateHalfInning(Team& battingTeam, const Pitcher& pitcher, double parkFactor, int inningNumber, std::vector<double>& inningScoreTracker) {
-    int outs = 0;
+int MatchSimulator::simulateHalfInning(Team& battingTeam, const Pitcher& pitcher, double parkFactor, int inningNumber,
+                                        std::vector<double>& inningScoreTracker, int startingOuts,
+                                        bool initB1, bool initB2, bool initB3) {
+    int outs = startingOuts;
     int runs = 0;
-    bool b1 = false, b2 = false, b3 = false;
+    bool b1 = initB1, b2 = initB2, b3 = initB3;
 
-    // Extra innings Ghost Runner on 2nd base rule
-    if (inningNumber > 9) {
+    // Extra innings Ghost Runner on 2nd base rule (if starting fresh inning)
+    if (inningNumber > 9 && outs == 0 && !b1 && !b2 && !b3) {
         b2 = true;
     }
 
@@ -133,13 +135,24 @@ PredictionResult MatchSimulator::runSimulation() {
     PredictionResult result;
     result.homeTeam = homeTeam.getName();
     result.awayTeam = awayTeam.getName();
+    result.isLiveSimulation = liveState.isLive;
 
     int homeWins = 0;
     int awayWins = 0;
     double totalHomeRuns = 0;
     double totalAwayRuns = 0;
+    double remainingHomeRunsSum = 0;
+    double remainingAwayRunsSum = 0;
 
     std::vector<double> lines = {6.5, 7.5, 8.5, 9.5, 10.5, 11.5};
+    if (liveState.isLive && liveState.marketTotalLine > 0) {
+        double ml = liveState.marketTotalLine;
+        if (std::find(lines.begin(), lines.end(), ml) == lines.end()) {
+            lines.push_back(ml);
+            std::sort(lines.begin(), lines.end());
+        }
+    }
+
     std::map<double, int> overCounts;
     for (double l : lines) overCounts[l] = 0;
 
@@ -167,22 +180,47 @@ PredictionResult MatchSimulator::runSimulation() {
         awayStarter = std::make_shared<Pitcher>(9002, "Away Starter", Handedness::RIGHT, Handedness::RIGHT, true, 120.0, 4.10, 1.28, 8.4, 3.1, 1.20);
     }
 
+    int startInning = liveState.isLive ? std::max(1, liveState.currentInning) : 1;
+
     for (int sim = 0; sim < numSimulations; ++sim) {
-        homeTeam.getLineup().resetOrder();
-        awayTeam.getLineup().resetOrder();
+        if (liveState.isLive) {
+            homeTeam.getLineup().setBatterIndex(liveState.nextBatterIndexHome);
+            awayTeam.getLineup().setBatterIndex(liveState.nextBatterIndexAway);
+        } else {
+            homeTeam.getLineup().resetOrder();
+            awayTeam.getLineup().resetOrder();
+        }
 
-        int homeScore = 0;
-        int awayScore = 0;
+        int homeScore = liveState.isLive ? liveState.currentHomeRuns : 0;
+        int awayScore = liveState.isLive ? liveState.currentAwayRuns : 0;
+        int initialHomeScore = homeScore;
+        int initialAwayScore = awayScore;
 
-        for (int inn = 1; inn <= 9; ++inn) {
-            const Pitcher& activeHomeP = (inn <= 6) ? *homeStarter : homeBullpen;
-            awayScore += simulateHalfInning(awayTeam, activeHomeP, homeTeam.getParkFactor(), inn, awayInnings);
-
-            if (inn == 9 && homeScore > awayScore) {
-                // Walkoff/Lead in 9th
+        for (int inn = startInning; inn <= 9; ++inn) {
+            // Away half inning
+            if (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "bottom") {
+                // Top half already finished in real life
             } else {
+                int sOuts = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "top") ? liveState.currentOuts : 0;
+                bool b1 = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "top") ? liveState.runner1st : false;
+                bool b2 = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "top") ? liveState.runner2nd : false;
+                bool b3 = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "top") ? liveState.runner3rd : false;
+
+                const Pitcher& activeHomeP = (inn <= 6) ? *homeStarter : homeBullpen;
+                awayScore += simulateHalfInning(awayTeam, activeHomeP, homeTeam.getParkFactor(), inn, awayInnings, sOuts, b1, b2, b3);
+            }
+
+            // Home half inning
+            if (inn == 9 && homeScore > awayScore) {
+                // Home team leading in 9th - walkoff / game ends
+            } else {
+                int sOuts = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "bottom") ? liveState.currentOuts : 0;
+                bool b1 = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "bottom") ? liveState.runner1st : false;
+                bool b2 = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "bottom") ? liveState.runner2nd : false;
+                bool b3 = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "bottom") ? liveState.runner3rd : false;
+
                 const Pitcher& activeAwayP = (inn <= 6) ? *awayStarter : awayBullpen;
-                homeScore += simulateHalfInning(homeTeam, activeAwayP, homeTeam.getParkFactor(), inn, homeInnings);
+                homeScore += simulateHalfInning(homeTeam, activeAwayP, homeTeam.getParkFactor(), inn, homeInnings, sOuts, b1, b2, b3);
             }
         }
 
@@ -201,6 +239,8 @@ PredictionResult MatchSimulator::runSimulation() {
 
         totalHomeRuns += homeScore;
         totalAwayRuns += awayScore;
+        remainingHomeRunsSum += (homeScore - initialHomeScore);
+        remainingAwayRunsSum += (awayScore - initialAwayScore);
 
         int matchTotal = homeScore + awayScore;
         for (double l : lines) {
@@ -220,6 +260,8 @@ PredictionResult MatchSimulator::runSimulation() {
     result.awayWinProb = static_cast<double>(awayWins) / numSimulations;
     result.homeExpectedRuns = totalHomeRuns / numSimulations;
     result.awayExpectedRuns = totalAwayRuns / numSimulations;
+    result.liveRemainingExpectedRunsHome = remainingHomeRunsSum / numSimulations;
+    result.liveRemainingExpectedRunsAway = remainingAwayRunsSum / numSimulations;
     result.totalExpectedRuns = result.homeExpectedRuns + result.awayExpectedRuns;
 
     auto probToMoneyline = [](double prob) -> int {
@@ -256,12 +298,67 @@ PredictionResult MatchSimulator::runSimulation() {
         result.commonScores[scoreStr] = sortedScores[i].second;
     }
 
-    if (result.homeWinProb >= 0.58) {
-        result.recommendation = "Best Value: " + homeTeam.getName() + " Moneyline (" + (result.homeMoneyline > 0 ? "+" : "") + std::to_string(result.homeMoneyline) + ") with " + std::to_string(static_cast<int>(result.homeWinProb * 100)) + "% simulated edge.";
-    } else if (result.awayWinProb >= 0.58) {
-        result.recommendation = "Best Value: " + awayTeam.getName() + " Moneyline (" + (result.awayMoneyline > 0 ? "+" : "") + std::to_string(result.awayMoneyline) + ") with " + std::to_string(static_cast<int>(result.awayWinProb * 100)) + "% simulated edge.";
+    // Edge vs Market Calculation
+    if (liveState.marketTotalLine > 0 || liveState.marketHomeOdds != 0 || liveState.marketAwayOdds != 0) {
+        result.edgeVsMarket.hasMarketData = true;
+        result.edgeVsMarket.marketTotalLine = liveState.marketTotalLine;
+        result.edgeVsMarket.modelTotal = result.totalExpectedRuns;
+        result.edgeVsMarket.totalEdgeRuns = result.totalExpectedRuns - liveState.marketTotalLine;
+
+        if (result.edgeVsMarket.totalEdgeRuns >= 0.6) {
+            result.edgeVsMarket.totalSignal = "OVER " + std::to_string(liveState.marketTotalLine).substr(0, 3) + " (+EV Edge: +" + std::to_string(result.edgeVsMarket.totalEdgeRuns).substr(0, 4) + " Runs)";
+        } else if (result.edgeVsMarket.totalEdgeRuns <= -0.6) {
+            result.edgeVsMarket.totalSignal = "UNDER " + std::to_string(liveState.marketTotalLine).substr(0, 3) + " (+EV Edge: " + std::to_string(result.edgeVsMarket.totalEdgeRuns).substr(0, 4) + " Runs)";
+        } else {
+            result.edgeVsMarket.totalSignal = "FAIR TOTAL (No strong O/U edge)";
+        }
+
+        result.edgeVsMarket.marketHomeOdds = liveState.marketHomeOdds;
+        result.edgeVsMarket.marketAwayOdds = liveState.marketAwayOdds;
+
+        auto oddsToImplied = [](int ml) -> double {
+            if (ml == 0) return 0.5;
+            if (ml > 0) return 100.0 / (ml + 100.0);
+            return static_cast<double>(-ml) / (-ml + 100.0);
+        };
+
+        if (liveState.marketHomeOdds != 0) {
+            double impHome = oddsToImplied(liveState.marketHomeOdds);
+            result.edgeVsMarket.evHome = result.homeWinProb - impHome;
+        }
+        if (liveState.marketAwayOdds != 0) {
+            double impAway = oddsToImplied(liveState.marketAwayOdds);
+            result.edgeVsMarket.evAway = result.awayWinProb - impAway;
+        }
+
+        if (result.edgeVsMarket.evHome >= 0.04) {
+            result.edgeVsMarket.mlSignal = homeTeam.getAbbr() + " ML (" + (liveState.marketHomeOdds > 0 ? "+" : "") + std::to_string(liveState.marketHomeOdds) + ") +" + std::to_string(static_cast<int>(result.edgeVsMarket.evHome * 100)) + "% EV Edge";
+        } else if (result.edgeVsMarket.evAway >= 0.04) {
+            result.edgeVsMarket.mlSignal = awayTeam.getAbbr() + " ML (" + (liveState.marketAwayOdds > 0 ? "+" : "") + std::to_string(liveState.marketAwayOdds) + ") +" + std::to_string(static_cast<int>(result.edgeVsMarket.evAway * 100)) + "% EV Edge";
+        } else {
+            result.edgeVsMarket.mlSignal = "Fair Market Price";
+        }
+    }
+
+    if (liveState.isLive) {
+        std::ostringstream rec;
+        rec << "Live Resume Sim (" << liveState.inningHalf << " " << liveState.currentInning << "th, " << liveState.currentOuts << " Outs): ";
+        if (result.homeWinProb >= 0.58) {
+            rec << homeTeam.getName() << " Live Win Prob " << static_cast<int>(result.homeWinProb * 100) << "% (Exp Total: " << std::fixed << std::setprecision(1) << result.totalExpectedRuns << " Runs)";
+        } else if (result.awayWinProb >= 0.58) {
+            rec << awayTeam.getName() << " Live Win Prob " << static_cast<int>(result.awayWinProb * 100) << "% (Exp Total: " << std::fixed << std::setprecision(1) << result.totalExpectedRuns << " Runs)";
+        } else {
+            rec << "Tightly contested (" << awayTeam.getAbbr() << " " << liveState.currentAwayRuns << " - " << liveState.currentHomeRuns << " " << homeTeam.getAbbr() << "). Projected remaining: " << std::fixed << std::setprecision(1) << (result.liveRemainingExpectedRunsHome + result.liveRemainingExpectedRunsAway) << " Runs.";
+        }
+        result.recommendation = rec.str();
     } else {
-        result.recommendation = "Tight Game Alert: Consider " + (result.totalExpectedRuns > 8.5 ? std::string("Over 8.5 Runs") : std::string("Under 8.5 Runs")) + " or Runline +1.5.";
+        if (result.homeWinProb >= 0.58) {
+            result.recommendation = "Best Value: " + homeTeam.getName() + " Moneyline (" + (result.homeMoneyline > 0 ? "+" : "") + std::to_string(result.homeMoneyline) + ") with " + std::to_string(static_cast<int>(result.homeWinProb * 100)) + "% simulated edge.";
+        } else if (result.awayWinProb >= 0.58) {
+            result.recommendation = "Best Value: " + awayTeam.getName() + " Moneyline (" + (result.awayMoneyline > 0 ? "+" : "") + std::to_string(result.awayMoneyline) + ") with " + std::to_string(static_cast<int>(result.awayWinProb * 100)) + "% simulated edge.";
+        } else {
+            result.recommendation = "Tight Game Alert: Consider " + (result.totalExpectedRuns > 8.5 ? std::string("Over 8.5 Runs") : std::string("Under 8.5 Runs")) + " or Runline +1.5.";
+        }
     }
 
     double homeWoba = homeTeam.getLineup().getCompositeWoba();
@@ -269,7 +366,7 @@ PredictionResult MatchSimulator::runSimulation() {
     std::ostringstream ss;
     ss << homeTeam.getAbbr() << " lineup wOBA (" << std::fixed << std::setprecision(3) << homeWoba << ") vs "
        << awayTeam.getAbbr() << " lineup wOBA (" << awayWoba << "). "
-       << "Projected Starter matchup: " << homeStarter->getName() << " (ERA " << std::setprecision(2) << homeStarter->getEra() << ") vs "
+       << "Active Matchup: " << homeStarter->getName() << " (ERA " << std::setprecision(2) << homeStarter->getEra() << ") vs "
        << awayStarter->getName() << " (ERA " << awayStarter->getEra() << ").";
     result.keyInsight = ss.str();
 

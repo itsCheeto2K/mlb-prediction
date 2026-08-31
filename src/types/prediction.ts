@@ -61,6 +61,25 @@ export interface PredictionRequestPayload {
   homeBatters: PredictionBatterPayload[];
   awayBatters: PredictionBatterPayload[];
   simulations?: number;
+
+  // Live Resume Simulation parameters
+  isLiveSimulation?: boolean;
+  isLive?: boolean;
+  currentInning?: number;
+  inningHalf?: 'top' | 'bottom' | string;
+  outs?: number;
+  currentHomeRuns?: number;
+  currentAwayRuns?: number;
+  nextBatterIndexHome?: number;
+  nextBatterIndexAway?: number;
+  runner1st?: boolean;
+  runner2nd?: boolean;
+  runner3rd?: boolean;
+
+  // Market comparison lines
+  marketTotalLine?: number;
+  marketHomeOdds?: number;
+  marketAwayOdds?: number;
 }
 
 export interface TotalRunLine {
@@ -74,13 +93,29 @@ export interface HandicapLine {
   coverProb: number;
 }
 
+export interface EdgeVsMarket {
+  hasMarketData: boolean;
+  marketTotalLine: number;
+  modelTotal: number;
+  totalEdgeRuns: number;
+  totalSignal: string;
+  marketHomeOdds: number;
+  marketAwayOdds: number;
+  evHome: number;
+  evAway: number;
+  mlSignal: string;
+}
+
 export interface PredictionResult {
   homeTeam: string;
   awayTeam: string;
+  isLiveSimulation?: boolean;
   homeWinProb: number;
   awayWinProb: number;
   homeExpectedRuns: number;
   awayExpectedRuns: number;
+  liveRemainingExpectedRunsHome?: number;
+  liveRemainingExpectedRunsAway?: number;
   totalExpectedRuns: number;
   homeMoneyline: number;
   awayMoneyline: number;
@@ -90,6 +125,7 @@ export interface PredictionResult {
   homeInningRuns: number[];
   awayInningRuns: number[];
   commonScores: Record<string, number>;
+  edgeVsMarket?: EdgeVsMarket;
   recommendation: string;
   keyInsight: string;
 }
