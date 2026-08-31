@@ -182,6 +182,34 @@ PredictionResult MatchSimulator::runSimulation() {
 
     int startInning = liveState.isLive ? std::max(1, liveState.currentInning) : 1;
 
+    // FEAT-3: Dynamic Starter Stamina Model (calculate expected starter innings limit)
+    auto calculateStarterStaminaInning = [](const Pitcher& p) -> int {
+        double ip = p.getInningsPitched();
+        int rest = p.getRestDays();
+        int pitches = p.getLastStartPitches();
+
+        // Baseline starter expected IP across typical starts
+        double expectedIP = 5.4;
+        if (ip > 10.0) {
+            expectedIP = std::clamp(ip / 28.0, 4.0, 6.8);
+        }
+
+        // Rest days & previous pitch count fatigue adjustments
+        if (rest <= 3 || pitches >= 105) {
+            expectedIP -= 0.8;
+        } else if (rest == 4) {
+            expectedIP -= 0.3;
+        } else if (rest >= 6 && rest <= 8) {
+            expectedIP += 0.4;
+        }
+
+        int maxInning = static_cast<int>(std::round(expectedIP));
+        return std::clamp(maxInning, 4, 7);
+    };
+
+    int homeStarterMaxInning = calculateStarterStaminaInning(*homeStarter);
+    int awayStarterMaxInning = calculateStarterStaminaInning(*awayStarter);
+
     for (int sim = 0; sim < numSimulations; ++sim) {
         if (liveState.isLive) {
             homeTeam.getLineup().setBatterIndex(liveState.nextBatterIndexHome);
@@ -206,7 +234,7 @@ PredictionResult MatchSimulator::runSimulation() {
                 bool b2 = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "top") ? liveState.runner2nd : false;
                 bool b3 = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "top") ? liveState.runner3rd : false;
 
-                const Pitcher& activeHomeP = (inn <= 6) ? *homeStarter : homeBullpen;
+                const Pitcher& activeHomeP = (inn <= homeStarterMaxInning) ? *homeStarter : homeBullpen;
                 awayScore += simulateHalfInning(awayTeam, activeHomeP, homeTeam.getParkFactor(), inn, awayInnings, sOuts, b1, b2, b3);
             }
 
@@ -219,7 +247,7 @@ PredictionResult MatchSimulator::runSimulation() {
                 bool b2 = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "bottom") ? liveState.runner2nd : false;
                 bool b3 = (liveState.isLive && inn == liveState.currentInning && liveState.inningHalf == "bottom") ? liveState.runner3rd : false;
 
-                const Pitcher& activeAwayP = (inn <= 6) ? *awayStarter : awayBullpen;
+                const Pitcher& activeAwayP = (inn <= awayStarterMaxInning) ? *awayStarter : awayBullpen;
                 homeScore += simulateHalfInning(homeTeam, activeAwayP, homeTeam.getParkFactor(), inn, homeInnings, sOuts, b1, b2, b3);
             }
         }

@@ -48,6 +48,13 @@ export interface PlayerStats {
   vsRhpAb?: number;
   vsLhpAb?: number;
 
+  // New Features: Recent Form L10
+  l10Ops?: number;
+  l10Avg?: number;
+  l10Ab?: number;
+  l10Hits?: number;
+  l10HomeRuns?: number;
+
   // Pitching
   era?: string | number;
   whip?: string | number;
@@ -62,6 +69,10 @@ export interface PlayerStats {
   // REQ-03: Pitcher HBP caused
   hitBatsmen?: number;
   fipConstant?: number;
+
+  // New Features: Pitcher Rest Days & Fatigue
+  restDays?: number;
+  lastStartPitches?: number;
 }
 
 export interface MLBPlayer {

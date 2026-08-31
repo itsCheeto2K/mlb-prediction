@@ -25,6 +25,8 @@ private:
     int strikeouts;
     int hitBatsmen; // REQ-03: HBP caused by pitcher
     double fipConstant; // REQ-04: Dynamic FIP constant
+    int restDays; // FEAT-1: Days since last start
+    int lastStartPitches; // FEAT-1: Pitch count in previous outing
 
     PitcherMultipliers multipliers;
     void calculateMultipliers();
@@ -32,7 +34,8 @@ private:
 public:
     Pitcher(int id, const std::string& name, Handedness batH, Handedness throwH,
             bool starter, double ip, double era, double whip, double k9, double bb9, double hr9,
-            int w = 0, int l = 0, int so = 0, int hbp = 0, double fipConst = 3.15);
+            int w = 0, int l = 0, int so = 0, int hbp = 0, double fipConst = 3.15,
+            int rest = 5, int lastPitches = 90);
 
     bool getIsStarter() const { return isStarter; }
     double getInningsPitched() const { return inningsPitched; }
@@ -47,6 +50,8 @@ public:
     int getStrikeouts() const { return strikeouts; }
     int getHitBatsmen() const { return hitBatsmen; }
     double getFipConstant() const { return fipConstant; }
+    int getRestDays() const { return restDays; }
+    int getLastStartPitches() const { return lastStartPitches; }
 
     const PitcherMultipliers& getMultipliers() const { return multipliers; }
     void displayInfo() const override;

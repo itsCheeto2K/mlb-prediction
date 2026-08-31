@@ -9,14 +9,16 @@ Batter::Batter(int id, const std::string& name, Handedness batH, Handedness thro
                double avg, double obp, double slg, double ops,
                double vsRhpOps, double vsLhpOps,
                double vsRhpAvg, double vsLhpAvg,
-               int vsRhpAb, int vsLhpAb)
+               int vsRhpAb, int vsLhpAb,
+               double l10Ops, double l10Avg, int l10Ab)
     : Player(id, name, PositionType::BATTER, batH, throwH),
       battingOrder(order), atBats(ab), hits(h), doubles(d), triples(t), homeRuns(hr),
       walks(bb), strikeouts(so), hitByPitch(hbp), sacFlies(sf), intentionalWalks(ibb),
       avg(avg), obp(obp), slg(slg), ops(ops),
       vsRhpOps(vsRhpOps), vsLhpOps(vsLhpOps),
       vsRhpAvg(vsRhpAvg), vsLhpAvg(vsLhpAvg),
-      vsRhpAb(vsRhpAb), vsLhpAb(vsLhpAb) {
+      vsRhpAb(vsRhpAb), vsLhpAb(vsLhpAb),
+      l10Ops(l10Ops), l10Avg(l10Avg), l10Ab(l10Ab) {
     
     if (atBats <= 0) {
         atBats = 400;
@@ -79,6 +81,16 @@ void Batter::calculateProbabilities() {
     baseProbs.pTriple = std::clamp(static_cast<double>(triples) / pa, 0.001, 0.02);
     baseProbs.pDouble = std::clamp(static_cast<double>(doubles) / pa, 0.015, 0.09);
     baseProbs.pSingle = std::clamp(static_cast<double>(singles) / pa, 0.08, 0.25);
+
+    // FEAT-2: Incorporate L10 Recent Form modifier
+    if (l10Ab >= 15 && l10Ops > 0.250 && ops > 0.250) {
+        double formRatio = std::clamp(l10Ops / ops, 0.80, 1.25);
+        baseProbs.pSingle *= std::pow(formRatio, 0.4);
+        baseProbs.pDouble *= std::pow(formRatio, 0.6);
+        baseProbs.pHomeRun *= std::pow(formRatio, 0.8);
+        baseProbs.pWalk *= std::pow(formRatio, 0.3);
+        baseProbs.pStrikeout *= std::pow(1.0 / formRatio, 0.4);
+    }
 
     double sumNonOut = baseProbs.pWalk + baseProbs.pStrikeout + baseProbs.pHomeRun +
                        baseProbs.pTriple + baseProbs.pDouble + baseProbs.pSingle;

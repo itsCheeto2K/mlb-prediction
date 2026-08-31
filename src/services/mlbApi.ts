@@ -128,7 +128,152 @@ export async function fetchPlayerSplits(playerId: number) {
   }
 }
 
-// REQ-02 & REQ-03: Fetch player stats with HBP, SF, IBB, and hitBatsmen
+// FEAT-1: Fetch Pitcher Rest Days & Previous Outing Pitch Count from Game Log
+export async function fetchPitcherRestDays(pitcherId: number): Promise<{ restDays: number; lastStartPitches: number }> {
+  try {
+    const res = await fetch(`${BASE_API}/people/${pitcherId}/stats?stats=gameLog&group=pitching`);
+    if (!res.ok) throw new Error('Pitcher gameLog fetch failed');
+    const data = await res.json();
+    const splits = data.stats?.[0]?.splits || [];
+    if (splits.length === 0) {
+      return { restDays: 5, lastStartPitches: 90 };
+    }
+
+    const lastGame = splits[splits.length - 1];
+    const lastDateStr = lastGame.date;
+    const lastStartPitches = lastGame.stat?.numberOfPitches || 90;
+
+    let restDays = 5;
+    if (lastDateStr) {
+      const lastDate = new Date(lastDateStr).getTime();
+      const now = new Date().getTime();
+      const diffDays = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
+      restDays = Math.max(1, Math.min(30, diffDays));
+    }
+
+    return { restDays, lastStartPitches };
+  } catch (err) {
+    console.warn(`Fallback rest days for pitcher ${pitcherId}:`, err);
+    return { restDays: 5, lastStartPitches: 90 };
+  }
+}
+
+// FEAT-2: Fetch Batter Recent Form (Last 10 Games Rolling Aggregate)
+export async function fetchBatterRecentForm(batterId: number): Promise<{
+  l10Ops: number;
+  l10Avg: number;
+  l10Ab: number;
+  l10Hits: number;
+  l10HomeRuns: number;
+}> {
+  try {
+    const res = await fetch(`${BASE_API}/people/${batterId}/stats?stats=gameLog&group=hitting`);
+    if (!res.ok) throw new Error('Batter gameLog fetch failed');
+    const data = await res.json();
+    const splits = data.stats?.[0]?.splits || [];
+    if (splits.length === 0) {
+      return { l10Ops: 0.750, l10Avg: 0.255, l10Ab: 0, l10Hits: 0, l10HomeRuns: 0 };
+    }
+
+    // Take last 10 games
+    const last10 = splits.slice(-10);
+    let totalAb = 0;
+    let totalHits = 0;
+    let total2B = 0;
+    let total3B = 0;
+    let totalHr = 0;
+    let totalBb = 0;
+    let totalHbp = 0;
+    let totalSf = 0;
+
+    for (const g of last10) {
+      const st = g.stat || {};
+      totalAb += parseInt(st.atBats || '0', 10);
+      totalHits += parseInt(st.hits || '0', 10);
+      total2B += parseInt(st.doubles || '0', 10);
+      total3B += parseInt(st.triples || '0', 10);
+      totalHr += parseInt(st.homeRuns || '0', 10);
+      totalBb += parseInt(st.baseOnBalls || '0', 10);
+      totalHbp += parseInt(st.hitByPitch || '0', 10);
+      totalSf += parseInt(st.sacFlies || '0', 10);
+    }
+
+    const l10Avg = totalAb > 0 ? Number((totalHits / totalAb).toFixed(3)) : 0.255;
+    const pa = totalAb + totalBb + totalHbp + totalSf;
+    const l10Obp = pa > 0 ? (totalHits + totalBb + totalHbp) / pa : 0.325;
+    const totalBases = (totalHits - total2B - total3B - totalHr) + total2B * 2 + total3B * 3 + totalHr * 4;
+    const l10Slg = totalAb > 0 ? totalBases / totalAb : 0.420;
+    const l10Ops = Number((l10Obp + l10Slg).toFixed(3));
+
+    return {
+      l10Ops,
+      l10Avg,
+      l10Ab: totalAb,
+      l10Hits: totalHits,
+      l10HomeRuns: totalHr
+    };
+  } catch (err) {
+    console.warn(`Fallback recent form for batter ${batterId}:`, err);
+    return { l10Ops: 0.750, l10Avg: 0.255, l10Ab: 0, l10Hits: 0, l10HomeRuns: 0 };
+  }
+}
+
+// FEAT-4: Fetch Team Bullpen Fatigue (Last 3 Days IP Workload)
+export async function fetchTeamBullpenFatigue(teamId: number): Promise<{
+  bullpenL3IP: number;
+  eraMultiplier: number;
+  whipMultiplier: number;
+}> {
+  try {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 3);
+
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+
+    const res = await fetch(`${BASE_API}/teams/${teamId}/stats?stats=byDateRange&group=pitching&startDate=${startStr}&endDate=${endStr}`);
+    if (!res.ok) throw new Error('Bullpen date range fetch failed');
+    const data = await res.json();
+    const split = data.stats?.[0]?.splits?.[0]?.stat;
+
+    let totalIp = 0;
+    if (split && split.inningsPitched) {
+      totalIp = parseFloat(split.inningsPitched);
+    }
+
+    // Average starter pitches ~5.5 IP per game -> in 3 games = ~16.5 IP starter.
+    // Excess IP is absorbed by the bullpen.
+    const estimatedBullpenIp = Math.max(0, totalIp - 16.5);
+    let eraMultiplier = 1.0;
+    let whipMultiplier = 1.0;
+
+    if (estimatedBullpenIp >= 11.0) {
+      // Heavily taxed bullpen
+      eraMultiplier = 1.12;
+      whipMultiplier = 1.06;
+    } else if (estimatedBullpenIp >= 8.0) {
+      // Moderate fatigue
+      eraMultiplier = 1.05;
+      whipMultiplier = 1.03;
+    } else if (estimatedBullpenIp <= 4.0) {
+      // Well rested
+      eraMultiplier = 0.96;
+      whipMultiplier = 0.98;
+    }
+
+    return {
+      bullpenL3IP: Number(estimatedBullpenIp.toFixed(1)),
+      eraMultiplier,
+      whipMultiplier
+    };
+  } catch (err) {
+    console.warn(`Fallback bullpen fatigue for team ${teamId}:`, err);
+    return { bullpenL3IP: 5.0, eraMultiplier: 1.0, whipMultiplier: 1.0 };
+  }
+}
+
+// REQ-02 & REQ-03: Fetch player stats with HBP, SF, IBB, hitBatsmen, Rest Days, and L10 Form
 export async function fetchPlayerStats(playerId: number, isPitcher: boolean): Promise<PlayerStats> {
   if (cache.playerStats[playerId]) return cache.playerStats[playerId];
 
@@ -150,8 +295,18 @@ export async function fetchPlayerStats(playerId: number, isPitcher: boolean): Pr
     }
 
     let splitsData = { vsRhpOps: 0, vsLhpOps: 0, vsRhpAvg: 0, vsLhpAvg: 0, vsRhpAb: 0, vsLhpAb: 0 };
+    let recentFormData = { l10Ops: 0.750, l10Avg: 0.255, l10Ab: 0, l10Hits: 0, l10HomeRuns: 0 };
+    let restDaysData = { restDays: 5, lastStartPitches: 90 };
+
     if (!isPitcher) {
-      splitsData = await fetchPlayerSplits(playerId);
+      const [splits, recent] = await Promise.all([
+        fetchPlayerSplits(playerId),
+        fetchBatterRecentForm(playerId)
+      ]);
+      splitsData = splits;
+      recentFormData = recent;
+    } else {
+      restDaysData = await fetchPitcherRestDays(playerId);
     }
 
     const stats: PlayerStats = {
@@ -174,6 +329,8 @@ export async function fetchPlayerStats(playerId: number, isPitcher: boolean): Pr
       intentionalWalks: split.intentionalWalks || 0,
       // REQ-05
       ...splitsData,
+      // FEAT-2: L10 Recent form
+      ...recentFormData,
 
       // Pitching
       era: split.era || '3.85',
@@ -187,7 +344,9 @@ export async function fetchPlayerStats(playerId: number, isPitcher: boolean): Pr
       homeRunsPer9: split.homeRunsPer9 || '1.1',
       // REQ-03
       hitBatsmen: split.hitBatsmen || split.hitByPitch || 0,
-      fipConstant: cache.leagueFipConstant
+      fipConstant: cache.leagueFipConstant,
+      // FEAT-1: Rest days & pitch fatigue
+      ...restDaysData
     };
 
     cache.playerStats[playerId] = stats;

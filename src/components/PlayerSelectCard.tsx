@@ -80,18 +80,36 @@ export const PlayerSelectCard: React.FC<PlayerSelectCardProps> = ({
 
       {/* Quick Player Stat preview pills */}
       {selectedPlayer && selectedPlayer.stats && (
-        <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400">
+        <div className="mt-2 pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1 text-[11px] font-mono text-slate-400">
           {isPitcher ? (
             <>
               <div>ERA: <span className="text-amber-300 font-bold">{selectedPlayer.stats.era || '3.85'}</span></div>
               <div>WHIP: <span className="text-slate-200">{selectedPlayer.stats.whip || '1.20'}</span></div>
-              <div>K/9: <span className="text-cyan-300">{selectedPlayer.stats.strikeoutsPer9Inn || '8.8'}</span></div>
+              {selectedPlayer.stats.restDays !== undefined && (
+                <div className={`px-1.5 py-0.5 rounded text-[10px] ${
+                  selectedPlayer.stats.restDays <= 4
+                    ? 'bg-rose-950/80 text-rose-300 border border-rose-800'
+                    : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                }`}>
+                  Rest: {selectedPlayer.stats.restDays}d ({selectedPlayer.stats.lastStartPitches || 90}p)
+                </div>
+              )}
             </>
           ) : (
             <>
               <div>AVG: <span className="text-cyan-300 font-bold">{selectedPlayer.stats.avg || '.260'}</span></div>
               <div>OPS: <span className="text-emerald-300">{selectedPlayer.stats.ops || '.760'}</span></div>
-              <div>HR: <span className="text-rose-400 font-bold">{selectedPlayer.stats.homeRuns || 0}</span></div>
+              {selectedPlayer.stats.l10Ops ? (
+                <div className={`px-1.5 py-0.5 rounded text-[10px] ${
+                  selectedPlayer.stats.l10Ops >= Number(selectedPlayer.stats.ops || 0.750)
+                    ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                    : 'bg-amber-950/80 text-amber-300 border border-amber-800'
+                }`}>
+                  L10: {selectedPlayer.stats.l10Ops.toFixed(3)}
+                </div>
+              ) : (
+                <div>HR: <span className="text-rose-400 font-bold">{selectedPlayer.stats.homeRuns || 0}</span></div>
+              )}
             </>
           )}
         </div>

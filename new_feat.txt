@@ -1,0 +1,5 @@
+Feature                         Endpoint                         Data có                                      Accuracy
+Pitcher Rest Days               gameLog&group=pitching         Date + IP + Pitches per start              +2–3%
+Recent Form L10                 gameLog&group=hitting          Per-game AB/H/HR (127 entries!)           +3–4%
+Pitcher Stamina Model           Không cần API                  Dùng inningsPitched đã có                  +1–2%
+Bullpen Fatigue                 byDateRange&group=pitching     IP trong date range                         +1–2%

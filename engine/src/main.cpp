@@ -115,9 +115,15 @@ std::shared_ptr<Batter> parseBatterJson(const std::string& bJson, int defaultOrd
     int vsRhpAb = extractInt(bJson, "vsRhpAb", 0);
     int vsLhpAb = extractInt(bJson, "vsLhpAb", 0);
 
+    // FEAT-2: L10 Recent Form
+    double l10Ops = extractDouble(bJson, "l10Ops", 0.0);
+    double l10Avg = extractDouble(bJson, "l10Avg", 0.0);
+    int l10Ab = extractInt(bJson, "l10Ab", 0);
+
     return std::make_shared<Batter>(id, name, batH, throwH, order, ab, h, d, t, hr, bb, so,
                                    hbp, sf, ibb, avg, obp, slg, ops,
-                                   vsRhpOps, vsLhpOps, vsRhpAvg, vsLhpAvg, vsRhpAb, vsLhpAb);
+                                   vsRhpOps, vsLhpOps, vsRhpAvg, vsLhpAvg, vsRhpAb, vsLhpAb,
+                                   l10Ops, l10Avg, l10Ab);
 }
 
 std::shared_ptr<Pitcher> parsePitcherJson(const std::string& pJson, bool isStarter, double defaultFipConst = 3.15) {
@@ -136,8 +142,10 @@ std::shared_ptr<Pitcher> parsePitcherJson(const std::string& pJson, bool isStart
     int so = extractInt(pJson, "strikeouts", 145);
     int hbp = extractInt(pJson, "hitBatsmen", 5);
     double fipConst = extractDouble(pJson, "fipConstant", defaultFipConst);
+    int restDays = extractInt(pJson, "restDays", 5);
+    int lastStartPitches = extractInt(pJson, "lastStartPitches", 90);
 
-    return std::make_shared<Pitcher>(id, name, batH, throwH, isStarter, ip, era, whip, k9, bb9, hr9, wins, losses, so, hbp, fipConst);
+    return std::make_shared<Pitcher>(id, name, batH, throwH, isStarter, ip, era, whip, k9, bb9, hr9, wins, losses, so, hbp, fipConst, restDays, lastStartPitches);
 }
 
 int main(int argc, char* argv[]) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MLBTeam, MLBPlayer } from '../types/mlb';
 import { PredictionResult, PredictionRequestPayload, PredictionBatterPayload, PredictionPitcherPayload } from '../types/prediction';
-import { fetchMLBTeams, fetchTeamRoster, fetchPlayerStats, fetchLeagueFipConstant, DEFAULT_BATTER_STATS, DEFAULT_PITCHER_STATS } from '../services/mlbApi';
+import { fetchMLBTeams, fetchTeamRoster, fetchPlayerStats, fetchLeagueFipConstant, fetchTeamBullpenFatigue, DEFAULT_BATTER_STATS, DEFAULT_PITCHER_STATS } from '../services/mlbApi';
 import { runPrediction } from '../services/predictionApi';
 import { PlayerSelectCard } from './PlayerSelectCard';
 import { PredictionResults } from './PredictionResults';
@@ -259,7 +259,12 @@ export const PredictionTab: React.FC<PredictionTabProps> = ({
     try {
       const homeTeam = teams.find(t => t.id === homeTeamId)!;
       const awayTeam = teams.find(t => t.id === awayTeamId)!;
-      const leagueFipConst = await fetchLeagueFipConstant();
+      
+      const [leagueFipConst, homeBullpenFatigue, awayBullpenFatigue] = await Promise.all([
+        fetchLeagueFipConstant(),
+        fetchTeamBullpenFatigue(homeTeamId),
+        fetchTeamBullpenFatigue(awayTeamId)
+      ]);
 
       // Construct Home Pitcher Payload
       const homePitcherObj = homeRoster.find(p => p.id === homePitcherId);
@@ -279,7 +284,9 @@ export const PredictionTab: React.FC<PredictionTabProps> = ({
         losses: homePitcherStats.losses || 7,
         strikeouts: homePitcherStats.strikeOuts || 140,
         hitBatsmen: homePitcherStats.hitBatsmen || 5,
-        fipConstant: leagueFipConst
+        fipConstant: leagueFipConst,
+        restDays: homePitcherStats.restDays !== undefined ? homePitcherStats.restDays : 5,
+        lastStartPitches: homePitcherStats.lastStartPitches || 90
       };
 
       // Construct Away Pitcher Payload
@@ -300,7 +307,9 @@ export const PredictionTab: React.FC<PredictionTabProps> = ({
         losses: awayPitcherStats.losses || 7,
         strikeouts: awayPitcherStats.strikeOuts || 140,
         hitBatsmen: awayPitcherStats.hitBatsmen || 5,
-        fipConstant: leagueFipConst
+        fipConstant: leagueFipConst,
+        restDays: awayPitcherStats.restDays !== undefined ? awayPitcherStats.restDays : 5,
+        lastStartPitches: awayPitcherStats.lastStartPitches || 90
       };
 
       // Construct Home 9 Batters
@@ -334,7 +343,10 @@ export const PredictionTab: React.FC<PredictionTabProps> = ({
           vsRhpAvg: stats.vsRhpAvg || 0,
           vsLhpAvg: stats.vsLhpAvg || 0,
           vsRhpAb: stats.vsRhpAb || 0,
-          vsLhpAb: stats.vsLhpAb || 0
+          vsLhpAb: stats.vsLhpAb || 0,
+          l10Ops: stats.l10Ops || 0,
+          l10Avg: stats.l10Avg || 0,
+          l10Ab: stats.l10Ab || 0
         });
       }
 
@@ -369,20 +381,28 @@ export const PredictionTab: React.FC<PredictionTabProps> = ({
           vsRhpAvg: stats.vsRhpAvg || 0,
           vsLhpAvg: stats.vsLhpAvg || 0,
           vsRhpAb: stats.vsRhpAb || 0,
-          vsLhpAb: stats.vsLhpAb || 0
+          vsLhpAb: stats.vsLhpAb || 0,
+          l10Ops: stats.l10Ops || 0,
+          l10Avg: stats.l10Avg || 0,
+          l10Ab: stats.l10Ab || 0
         });
       }
+
+      const calculatedHomeBullpenEra = Number((3.75 * homeBullpenFatigue.eraMultiplier).toFixed(2));
+      const calculatedHomeBullpenWhip = Number((1.20 * homeBullpenFatigue.whipMultiplier).toFixed(2));
+      const calculatedAwayBullpenEra = Number((3.85 * awayBullpenFatigue.eraMultiplier).toFixed(2));
+      const calculatedAwayBullpenWhip = Number((1.22 * awayBullpenFatigue.whipMultiplier).toFixed(2));
 
       const payload: PredictionRequestPayload = {
         homeTeamName: homeTeam.name,
         homeTeamAbbr: homeTeam.abbreviation,
         homeParkFactor: homeTeam.parkFactor || 1.00,
-        homeBullpenEra: 3.75,
-        homeBullpenWhip: 1.20,
+        homeBullpenEra: calculatedHomeBullpenEra,
+        homeBullpenWhip: calculatedHomeBullpenWhip,
         awayTeamName: awayTeam.name,
         awayTeamAbbr: awayTeam.abbreviation,
-        awayBullpenEra: 3.85,
-        awayBullpenWhip: 1.22,
+        awayBullpenEra: calculatedAwayBullpenEra,
+        awayBullpenWhip: calculatedAwayBullpenWhip,
         fipConstant: leagueFipConst,
         homePitcher: [homePitcherPayload],
         awayPitcher: [awayPitcherPayload],

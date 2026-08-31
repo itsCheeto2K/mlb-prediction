@@ -25,6 +25,10 @@ export interface PredictionBatterPayload {
   vsLhpAvg?: number;
   vsRhpAb?: number;
   vsLhpAb?: number;
+  // Recent Form L10
+  l10Ops?: number;
+  l10Avg?: number;
+  l10Ab?: number;
 }
 
 export interface PredictionPitcherPayload {
@@ -43,6 +47,9 @@ export interface PredictionPitcherPayload {
   strikeouts: number;
   hitBatsmen?: number;
   fipConstant?: number;
+  // Pitcher Rest Days & Fatigue
+  restDays?: number;
+  lastStartPitches?: number;
 }
 
 export interface PredictionRequestPayload {
