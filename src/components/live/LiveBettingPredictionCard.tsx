@@ -55,7 +55,7 @@ export const LiveBettingPredictionCard: React.FC<LiveBettingPredictionCardProps>
   const homeTeam = game.teams.home;
   const linescore = liveFeed?.liveData?.linescore || game.linescore;
 
-  // Auto-fetch Real Sportsbook Odds from SharpAPI (DraftKings/FanDuel: MNL, Totals, Runline)
+  // Auto-fetch Real Sportsbook Odds from SharpAPI (FanDuel: MNL, Totals, Runline)
   const refreshSharpOdds = async () => {
     setIsFetchingSharpOdds(true);
     try {
@@ -326,7 +326,7 @@ export const LiveBettingPredictionCard: React.FC<LiveBettingPredictionCardProps>
               )}
             </div>
             <p className="text-[11px] text-slate-400 font-mono">
-              Live Resume Monte Carlo • {sharpOdds?.sportsbook || 'FanDuel / DraftKings'} Real Odds • +EV Edge & Kelly Bet Sizing
+              Live Resume Monte Carlo • {sharpOdds?.sportsbook || 'FanDuel'} Real Odds • +EV Edge & Kelly Bet Sizing
             </p>
           </div>
         </div>
@@ -475,7 +475,7 @@ export const LiveBettingPredictionCard: React.FC<LiveBettingPredictionCardProps>
             {/* Quick Summary / Trigger */}
             <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-800/50 flex flex-col justify-between">
               <div className="text-[10px] text-cyan-300 leading-tight">
-                Odds từ <strong>{sharpOdds?.sportsbook || 'FanDuel/DraftKings'}</strong> được tự động đối chiếu với Model để tính <strong>+EV Edge</strong> và <strong>Số tiền cược Kelly</strong>.
+                Odds từ <strong>{sharpOdds?.sportsbook || 'FanDuel'}</strong> được tự động đối chiếu với Model để tính <strong>+EV Edge</strong> và <strong>Số tiền cược Kelly</strong>.
               </div>
               <button
                 onClick={handleRunCppEngine}
