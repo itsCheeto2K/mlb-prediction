@@ -1,7 +1,7 @@
 /**
  * SharpAPI Integration Service for MLB Sports Betting Odds
  * Base URL: https://api.sharpapi.io/api/v1
- * Provides real-time and pregame Moneyline, Totals (O/U), and Runline Spreads
+ * Provides real-time and pregame Moneyline, Totals (O/U), and Runline Spreads from DraftKings and FanDuel
  */
 
 const SHARP_API_KEY = 'sk_live_Fr5zkSo1jVSQYz4dtkjwK4';
@@ -11,18 +11,18 @@ export interface SharpOddsItem {
   id: string;
   sportsbook: string;
   event_id: string;
-  event_uuid: string;
-  sport: string;
-  league: string;
-  home_team: string;
-  away_team: string;
+  event_uuid?: string;
+  sport?: string;
+  league?: string;
+  home_team?: string;
+  away_team?: string;
   market_type: 'moneyline' | 'run_line' | 'total_runs' | 'team_total' | string;
   selection: string;
   selection_type: string;
   team_side?: 'home' | 'away';
   odds_american: number;
-  odds_decimal: number;
-  odds_probability: number;
+  odds_decimal?: number;
+  odds_probability?: number;
   line: number | null;
   is_live: boolean;
   timestamp: string;
@@ -62,54 +62,108 @@ export interface LiveSportsbookOdds {
 }
 
 // In-memory cache to prevent rate-limiting (12 req/minute limit)
-let cachedOdds: Record<string, { data: SharpOddsItem[]; timestamp: number }> = {};
-const CACHE_TTL_MS = 10000; // Cache for 10 seconds
+let cachedOdds: { data: SharpOddsItem[]; timestamp: number } | null = null;
+const CACHE_TTL_MS = 15000; // Cache for 15 seconds
+
+const MLB_TEAM_ALIASES: Record<string, string[]> = {
+  ATH: ['ATH', 'OAK', 'OAKLAND', 'ATHLETICS', "A'S"],
+  OAK: ['ATH', 'OAK', 'OAKLAND', 'ATHLETICS', "A'S"],
+  CWS: ['CWS', 'CHW', 'WHITE SOX', 'CHICAGO WHITE SOX', 'CHI WHITE SOX'],
+  CHW: ['CWS', 'CHW', 'WHITE SOX', 'CHICAGO WHITE SOX', 'CHI WHITE SOX'],
+  SD: ['SD', 'SDP', 'PADRES', 'SAN DIEGO PADRES', 'SD PADRES'],
+  SDP: ['SD', 'SDP', 'PADRES', 'SAN DIEGO PADRES', 'SD PADRES'],
+  SF: ['SF', 'SFG', 'GIANTS', 'SAN FRANCISCO GIANTS', 'SF GIANTS'],
+  SFG: ['SF', 'SFG', 'GIANTS', 'SAN FRANCISCO GIANTS', 'SF GIANTS'],
+  TB: ['TB', 'TBR', 'RAYS', 'TAMPA BAY RAYS', 'TB RAYS'],
+  TBR: ['TB', 'TBR', 'RAYS', 'TAMPA BAY RAYS', 'TB RAYS'],
+  WAS: ['WAS', 'WSH', 'NATIONALS', 'WASHINGTON NATIONALS', 'WAS NATIONALS'],
+  WSH: ['WAS', 'WSH', 'NATIONALS', 'WASHINGTON NATIONALS', 'WAS NATIONALS'],
+  KC: ['KC', 'KCR', 'ROYALS', 'KANSAS CITY ROYALS', 'KC ROYALS'],
+  KCR: ['KC', 'KCR', 'ROYALS', 'KANSAS CITY ROYALS', 'KC ROYALS'],
+  ARI: ['ARI', 'AZ', 'DIAMONDBACKS', 'ARIZONA DIAMONDBACKS', 'D-BACKS', 'ARI DIAMONDBACKS'],
+  AZ: ['ARI', 'AZ', 'DIAMONDBACKS', 'ARIZONA DIAMONDBACKS', 'D-BACKS', 'ARI DIAMONDBACKS'],
+  BOS: ['BOS', 'RED SOX', 'BOSTON RED SOX', 'BOS RED SOX'],
+  CHC: ['CHC', 'CUBS', 'CHICAGO CUBS', 'CHI CUBS'],
+  LAA: ['LAA', 'ANGELS', 'LOS ANGELES ANGELS', 'LA ANGELS'],
+  LAD: ['LAD', 'DODGERS', 'LOS ANGELES DODGERS', 'LA DODGERS'],
+  NYY: ['NYY', 'YANKEES', 'NEW YORK YANKEES', 'NY YANKEES'],
+  NYM: ['NYM', 'METS', 'NEW YORK METS', 'NY METS']
+};
 
 /**
- * Fetch all active MLB odds snapshot from SharpAPI for a specific sportsbook (defaults to 'fanduel')
+ * Fetch all active MLB odds snapshot from SharpAPI for main betting markets (Moneyline, Totals, Runline)
  */
-export async function fetchMlbSharpOdds(sportsbook: string = 'fanduel'): Promise<SharpOddsItem[]> {
+export async function fetchMlbSharpOdds(): Promise<SharpOddsItem[]> {
   const now = Date.now();
-  const cacheKey = sportsbook.toLowerCase();
-  if (cachedOdds[cacheKey] && now - cachedOdds[cacheKey].timestamp < CACHE_TTL_MS) {
-    return cachedOdds[cacheKey].data;
+  if (cachedOdds && now - cachedOdds.timestamp < CACHE_TTL_MS) {
+    return cachedOdds.data;
   }
 
   try {
-    const url = `${SHARP_BASE_URL}/odds?league=mlb${sportsbook ? `&sportsbook=${encodeURIComponent(sportsbook)}` : ''}&limit=250`;
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${SHARP_API_KEY}`,
-        Accept: 'application/json'
-      }
-    });
+    const headers = {
+      Authorization: `Bearer ${SHARP_API_KEY}`,
+      Accept: 'application/json'
+    };
 
-    if (!response.ok) {
-      console.warn(`SharpAPI returned status ${response.status}`);
-      return cachedOdds[cacheKey]?.data || [];
-    }
+    // Query key markets in parallel so player props don't crowd out game lines
+    const [mlRes, totRes, rlRes] = await Promise.all([
+      fetch(`${SHARP_BASE_URL}/odds?league=mlb&market_type=moneyline&limit=250`, { headers }),
+      fetch(`${SHARP_BASE_URL}/odds?league=mlb&market_type=total_runs&is_main_line=true&limit=250`, { headers }),
+      fetch(`${SHARP_BASE_URL}/odds?league=mlb&market_type=run_line&is_main_line=true&limit=250`, { headers })
+    ]);
 
-    const data = await response.json();
-    if (data && Array.isArray(data.data)) {
-      cachedOdds[cacheKey] = { data: data.data, timestamp: now };
-      return data.data;
+    const [mlData, totData, rlData] = await Promise.all([
+      mlRes.ok ? mlRes.json() : { data: [] },
+      totRes.ok ? totRes.json() : { data: [] },
+      rlRes.ok ? rlRes.json() : { data: [] }
+    ]);
+
+    const allItems: SharpOddsItem[] = [
+      ...(Array.isArray(mlData.data) ? mlData.data : []),
+      ...(Array.isArray(totData.data) ? totData.data : []),
+      ...(Array.isArray(rlData.data) ? rlData.data : [])
+    ];
+
+    if (allItems.length > 0) {
+      cachedOdds = { data: allItems, timestamp: now };
+      return allItems;
     }
   } catch (err) {
     console.warn('Error fetching from SharpAPI:', err);
   }
 
-  return cachedOdds[cacheKey]?.data || [];
+  return cachedOdds?.data || [];
 }
 
 /**
  * Normalize string for fuzzy team matching
  */
 function normalizeName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 /**
- * Find real-time SharpAPI sportsbook odds for a specific MLB matchup (defaults to FanDuel)
+ * Helper to match team names / abbreviations with MLB alias support
+ */
+function matchTeam(targetName: string, targetAbbr: string, itemName: string, itemAbbr: string): boolean {
+  const normTarget = normalizeName(targetName);
+  const normItem = normalizeName(itemName);
+  const tAbbr = (targetAbbr || '').toUpperCase();
+  const iAbbr = (itemAbbr || '').toUpperCase();
+
+  if (tAbbr && iAbbr && tAbbr === iAbbr) return true;
+  if (MLB_TEAM_ALIASES[tAbbr]?.some((alias) => normalizeName(alias) === normItem || alias.toUpperCase() === iAbbr)) {
+    return true;
+  }
+  if (normTarget && normItem && (normTarget.includes(normItem) || normItem.includes(normTarget))) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Find real-time SharpAPI sportsbook odds for a specific MLB matchup (defaults to FanDuel or DraftKings)
  */
 export async function getLiveSportsbookOddsForGame(
   homeTeamName: string,
@@ -118,23 +172,18 @@ export async function getLiveSportsbookOddsForGame(
   awayAbbr: string,
   sportsbook: string = 'fanduel'
 ): Promise<LiveSportsbookOdds | null> {
-  const allOdds = await fetchMlbSharpOdds(sportsbook);
+  const allOdds = await fetchMlbSharpOdds();
   if (!allOdds || allOdds.length === 0) return null;
-
-  const hNorm = normalizeName(homeTeamName);
-  const aNorm = normalizeName(awayTeamName);
-  const hAbbr = homeAbbr.toUpperCase();
-  const aAbbr = awayAbbr.toUpperCase();
 
   // 1. Find odds matching both teams
   const matchOdds = allOdds.filter((item) => {
-    const itemHNorm = normalizeName(item.home_team || item.home?.name || '');
-    const itemANorm = normalizeName(item.away_team || item.away?.name || '');
-    const itemHAbbr = (item.home?.abbreviation || '').toUpperCase();
-    const itemAAbbr = (item.away?.abbreviation || '').toUpperCase();
+    const itemHName = item.home_team || item.home?.name || '';
+    const itemAName = item.away_team || item.away?.name || '';
+    const itemHAbbr = item.home?.abbreviation || '';
+    const itemAAbbr = item.away?.abbreviation || '';
 
-    const homeMatches = itemHNorm.includes(hNorm) || hNorm.includes(itemHNorm) || itemHAbbr === hAbbr;
-    const awayMatches = itemANorm.includes(aNorm) || aNorm.includes(itemANorm) || itemAAbbr === aAbbr;
+    const homeMatches = matchTeam(homeTeamName, homeAbbr, itemHName, itemHAbbr);
+    const awayMatches = matchTeam(awayTeamName, awayAbbr, itemAName, itemAAbbr);
 
     return homeMatches && awayMatches;
   });
@@ -143,11 +192,11 @@ export async function getLiveSportsbookOddsForGame(
     return extractGameOdds(matchOdds, sportsbook);
   }
 
-  // 2. Fallback: match by home team abbreviation/name
+  // 2. Fallback: match by home team
   const homeOdds = allOdds.filter((item) => {
-    const itemHNorm = normalizeName(item.home_team || item.home?.name || '');
-    const itemHAbbr = (item.home?.abbreviation || '').toUpperCase();
-    return itemHNorm.includes(hNorm) || hNorm.includes(itemHNorm) || itemHAbbr === hAbbr;
+    const itemHName = item.home_team || item.home?.name || '';
+    const itemHAbbr = item.home?.abbreviation || '';
+    return matchTeam(homeTeamName, homeAbbr, itemHName, itemHAbbr);
   });
 
   if (homeOdds.length > 0) {
@@ -169,26 +218,24 @@ function formatSportsbookName(book: string): string {
 }
 
 function extractGameOdds(items: SharpOddsItem[], preferredBook: string = 'fanduel'): LiveSportsbookOdds {
-  const prefItems = items.filter(
-    (i) => i.sportsbook?.toLowerCase() === preferredBook.toLowerCase()
-  );
-  const targetItems = prefItems.length > 0 ? prefItems : items;
-  const primaryBook = targetItems[0]?.sportsbook || preferredBook;
-  const isLive = targetItems.some((i) => i.is_live);
-  const timestamp = targetItems[0]?.timestamp || new Date().toISOString();
+  const prefBookLower = preferredBook.toLowerCase();
+  const prefItems = items.filter((i) => i.sportsbook?.toLowerCase() === prefBookLower);
 
-  // 1. Moneyline Extraction
+  const primaryBook = prefItems.length > 0 ? prefItems[0]?.sportsbook : items[0]?.sportsbook || preferredBook;
+  const isLive = items.some((i) => i.is_live);
+  const timestamp = items[0]?.timestamp || new Date().toISOString();
+
+  // 1. Moneyline Extraction (prefer preferredBook, fallback to any available book)
   let homeMl: number | undefined;
   let awayMl: number | undefined;
   let homeMlProb = 0.5;
   let awayMlProb = 0.5;
 
-  const mlItems = targetItems.filter((i) => i.market_type === 'moneyline' && !i.is_player_prop);
-  // Prefer main lines
-  const mainMlItems = mlItems.filter((i) => i.is_main_line !== false);
-  const targetMlItems = mainMlItems.length > 0 ? mainMlItems : mlItems;
+  const getMlItems = (source: SharpOddsItem[]) => source.filter((i) => i.market_type === 'moneyline' && !i.is_player_prop);
+  let mlItems = getMlItems(prefItems);
+  if (mlItems.length === 0) mlItems = getMlItems(items);
 
-  for (const item of targetMlItems) {
+  for (const item of mlItems) {
     if (item.team_side === 'home' || item.selection_type === 'home') {
       homeMl = item.odds_american;
       homeMlProb = item.odds_probability || 0.5;
@@ -198,11 +245,12 @@ function extractGameOdds(items: SharpOddsItem[], preferredBook: string = 'fandue
     }
   }
 
-  // 2. Total Runs (Over/Under) Extraction
-  // EXCLUDE team_total and player props
-  const totalItems = targetItems.filter(
-    (i) => i.market_type === 'total_runs' && i.line !== null && !i.is_player_prop
-  );
+  // 2. Total Runs (Over/Under) Extraction (prefer preferredBook, fallback to any available book)
+  const getTotalItems = (source: SharpOddsItem[]) =>
+    source.filter((i) => i.market_type === 'total_runs' && i.line !== null && !i.is_player_prop);
+
+  let totalItems = getTotalItems(prefItems);
+  if (totalItems.length === 0) totalItems = getTotalItems(items);
 
   interface LineData {
     line: number;
@@ -255,8 +303,20 @@ function extractGameOdds(items: SharpOddsItem[], preferredBook: string = 'fandue
     }
 
     if (best) {
-      const over = best.overOdds ?? (best.underOdds !== undefined ? (best.underOdds > 0 ? -(best.underOdds + 20) : Math.abs(best.underOdds) - 20) : -110);
-      const under = best.underOdds ?? (best.overOdds !== undefined ? (best.overOdds > 0 ? -(best.overOdds + 20) : Math.abs(best.overOdds) - 20) : -110);
+      const over =
+        best.overOdds ??
+        (best.underOdds !== undefined
+          ? best.underOdds > 0
+            ? -(best.underOdds + 20)
+            : Math.abs(best.underOdds) - 20
+          : -110);
+      const under =
+        best.underOdds ??
+        (best.overOdds !== undefined
+          ? best.overOdds > 0
+            ? -(best.overOdds + 20)
+            : Math.abs(best.overOdds) - 20
+          : -110);
       selectedTotal = {
         line: best.line,
         overOdds: over,
@@ -265,18 +325,19 @@ function extractGameOdds(items: SharpOddsItem[], preferredBook: string = 'fandue
     }
   }
 
-  // 3. Run Line (Handicap spread)
-  const rlItems = targetItems.filter(
-    (i) => i.market_type === 'run_line' && i.line !== null && !i.is_player_prop
-  );
+  // 3. Run Line (Handicap spread) Extraction (prefer preferredBook, fallback to any available book)
+  const getRlItems = (source: SharpOddsItem[]) =>
+    source.filter((i) => i.market_type === 'run_line' && i.line !== null && !i.is_player_prop);
+
+  let rlItems = getRlItems(prefItems);
+  if (rlItems.length === 0) rlItems = getRlItems(items);
+
   let spread = 1.5;
   let homeSpreadOdds = -110;
   let awaySpreadOdds = -110;
 
   // Filter 1.5 spread items (standard MLB runline) or main lines
-  const standardRlItems = rlItems.filter(
-    (i) => Math.abs(i.line || 0) === 1.5 || i.is_main_line === true
-  );
+  const standardRlItems = rlItems.filter((i) => Math.abs(i.line || 0) === 1.5 || i.is_main_line === true);
   const targetRl = standardRlItems.length > 0 ? standardRlItems : rlItems;
 
   for (const item of targetRl) {
@@ -315,3 +376,4 @@ function extractGameOdds(items: SharpOddsItem[], preferredBook: string = 'fandue
     }
   };
 }
+
