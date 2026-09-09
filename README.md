@@ -56,42 +56,29 @@ flowchart TD
     Engine -->|IPC: 10,000 Iteration JSON via Stdout| Bridge
 ```
 
-- **Frontend Client**: Interactive UI with responsive cards, live baseball diamond visualizer, lineup builder, standings, and player comparison charts.
-- **Backend Bridge API**: Express.js microservice handling child process IPC execution of the compiled C++ binary, raw text lineup parsing, and CORS proxying.
+- **Frontend Client**: Interactive UI with responsive cards, live baseball diamond visualizer, in-game match predictions, standings, and player comparison charts.
+- **Backend Bridge API**: Express.js microservice handling child process IPC execution of the compiled C++ binary and CORS proxying.
 - **Core Engine**: Standalone native binary written in C++20 with zero external dependencies, utilizing STL algorithms and high-speed random distributions for Monte Carlo simulations.
 
 ---
 
 ## 🚀 Key Features
 
-### 1. 🎯 Match Prediction & Custom Lineup Simulator
-- **20-Player Custom Lineup Selector**:
-  - Away Team: 1 Starting Pitcher + 9 Batters (batting order 1–9).
-  - Home Team: 1 Starting Pitcher + 9 Batters (batting order 1–9).
-- **⚡ 1-Click Auto-Fill**: Automatically loads confirmed/projected starting lineups and active starting pitchers from live MLB rosters.
-- **📝 Raw Lineup Text Parser**: Smart NLP parser that extracts teams, starting pitchers, and batting orders from raw text/lineup announcements.
-- **Detailed Forecasting Metrics**:
-  - **Moneyline (Win Probability)**: Win % with fair American and Decimal odds calculation.
-  - **Total Runs (Over/Under)**: Projected total runs and probability distribution across lines (6.5 to 11.5).
-  - **Handicap / Runline Spread**: Probability to cover -1.5 / +1.5 spreads.
-  - **Inning-by-Inning Projections**: Expected scoring distribution across innings 1 through 9.
-  - **Top Simulated Scorelines & Matchup Insights**: Key strategic takeaways and tactical edge analysis.
-
-### 2. 🔴 Live In-Game Tracker & Live Probability
+### 1. 🔴 Live Game Center & In-Game Prediction
 - **Live Interactive Diamond Tracker**: Real-time visualization of base runners (1st, 2nd, 3rd), outs, count (balls/strikes), and current batter/pitcher.
 - **Real-Time Linescore & Play-by-Play**: Full inning-by-inning scoreboard with live pitch and play description feeds.
-- **Live Win Probability & In-Game Betting Intelligence**: Dynamic recalculation of win probabilities based on live game state and leverage index.
+- **Live Win Probability & In-Game Betting Intelligence**: Dynamic recalculation of win probabilities, projected run totals, handicap / spread coverage, and leverage index based on live game states and C++20 Monte Carlo simulations.
 - **Boxscore Matrix**: Live in-game hitting and pitching boxscores for active games.
 
-### 3. 📊 Team Stats & Standings
+### 2. 📊 Team Stats & Standings
 - Real-time American League & National League standings (East, Central, West divisions + Wild Card races).
 - Complete record breakdowns: Wins, Losses, PCT, Games Back (GB), Runs Scored (RS), Runs Allowed (RA), Run Differential (DIFF), Home/Away splits, Streak, and L10.
 
-### 4. ⚾ Player Database & Analytics
+### 3. ⚾ Player Database & Analytics
 - Searchable player database across all 30 MLB active 40-man rosters.
 - Toggle between **Hitting Stats** (AVG, OBP, SLG, OPS, HR, RBI, H, 2B, 3B, BB, SO, SB) and **Pitching Stats** (ERA, WHIP, W-L, K/9, BB/9, HR/9, IP, SO, SV).
 
-### 5. 🏆 League Leaders
+### 4. 🏆 League Leaders
 - Real-time Top 10 MLB leaders across hitting (AVG, HR, RBI, OPS, Hits) and pitching categories (ERA, Strikeouts, Wins, WHIP).
 
 ---
